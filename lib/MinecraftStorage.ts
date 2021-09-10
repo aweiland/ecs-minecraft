@@ -14,6 +14,7 @@ interface MinecraftStorageProps {
 export class MinecraftStorage extends cdk.Construct {
     
     public readonly filesystem: efs.FileSystem
+    public readonly accessPoint: efs.AccessPoint
     
     constructor(scope: cdk.Construct, id: string, props: MinecraftStorageProps) {
         super(scope, id);
@@ -24,12 +25,13 @@ export class MinecraftStorage extends cdk.Construct {
         });
         
         
-        const accessPoint = this.filesystem.addAccessPoint("MinecraftRoot", {
+        this.accessPoint = this.filesystem.addAccessPoint("MinecraftRoot", {
             posixUser: { uid: '1000', gid: '1000' },
             path: "/minecraft"
         });
         
         
+
         const efsAccessSg = new ec2.SecurityGroup(this, "EfsAccessSG", {
             vpc: props.vpc,
             allowAllOutbound: true,
