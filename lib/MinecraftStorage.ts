@@ -5,6 +5,7 @@ import * as s3 from '@aws-cdk/aws-s3'
 import * as iam from '@aws-cdk/aws-iam'
 import * as ec2 from '@aws-cdk/aws-ec2'
 
+
 interface MinecraftStorageProps {
     vpc: ec2.Vpc
 }
@@ -28,13 +29,14 @@ export class MinecraftStorage extends cdk.Construct {
             path: "/minecraft"
         });
         
-
-        // const accessPointSg = new ec2.SecurityGroup(this, "EfsAccessSG", {
-        //     vpc: props.vpc,
-        //     allowAllOutbound: true,
-        // })
-        // accessPointSg.addIngressRule(accessPoint., ec2.Port.tcp(22))
-
+        
+        const efsAccessSg = new ec2.SecurityGroup(this, "EfsAccessSG", {
+            vpc: props.vpc,
+            allowAllOutbound: true,
+        });
+        this.filesystem.connections.allowFrom(efsAccessSg, ec2.Port.tcp(2049));
+        
+        
         const syncEfsRole = new iam.Role(this, "DataSyncEfsRole", {
             assumedBy: new iam.ServicePrincipal('datasync.amazonaws.com')
         });
@@ -48,35 +50,47 @@ export class MinecraftStorage extends cdk.Construct {
         
         dataBucket.grantReadWrite(syncS3Role);
         
-        // const s3Location = new datasync.CfnLocationS3(this, "S3Location", {
-        //     s3BucketArn: dataBucket.bucketArn,
-        //     s3Config: {
-        //         bucketAccessRoleArn: syncS3Role.roleArn
-        //     },
-        //     subdirectory: '/minecraft'
-        // })
+        const s3Location = new datasync.CfnLocationS3(this, "S3Location", {
+            s3BucketArn: dataBucket.bucketArn,
+            s3Config: {
+                bucketAccessRoleArn: syncS3Role.roleArn
+            },
+            subdirectory: '/minecraft'
+        })
         
-        // const cfnFilesystem = this.filesystem.mountTargetsAvailable as efs.CfnMountTarget[]
-        // const sgArns = this.filesystem.connections.securityGroups.map(s => (s.node.defaultChild as ec2.CfnSecurityGroup).getAtt('arn').toString()) as string[]
+    
+        
+        const sgArn = cdk.Arn.format({
+            resource: 'security-group',
+            service: 'ec2',
+            resourceName: efsAccessSg.securityGroupId
+        }, cdk.Stack.of(this))
+        
+        const subnetArn = cdk.Arn.format({
+            resource: "subnet",
+            service: "ec2",
+            resourceName: props.vpc.selectSubnets({subnetType: ec2.SubnetType.PRIVATE}).subnets[0].subnetId
+        }, cdk.Stack.of(this))
+    
         
 
-        // const efsLocation = new datasync.CfnLocationEFS(this, "EFSLocation", {
-        //     efsFilesystemArn: this.filesystem.fileSystemArn,
-        //     subdirectory: "/minecraft",
-        //     ec2Config: {
-        //         subnetArn: cfnFilesystem[0].subnetId,
-        //         securityGroupArns: sgArns
-        //     }
-        // });
+        const efsLocation = new datasync.CfnLocationEFS(this, "EFSLocation", {
+            efsFilesystemArn: this.filesystem.fileSystemArn,
+            subdirectory: "/minecraft",
+            ec2Config: {
+                subnetArn: subnetArn,
+                securityGroupArns: [sgArn]
+            }
+        });
         
-        // const task = new datasync.CfnTask(this, "EfsToS3Task", {
-        //     sourceLocationArn: efsLocation.getAtt('arn').toString(),
-        //     destinationLocationArn: s3Location.getAtt('arn').toString(),
-        //     excludes: [{ 'filterType': 'SIMPLE_PATTERN', 'value': '*.jar|/world|/logs' }],
-        //     options: {
-        //         transferMode: 'CHANGED'
-        //     }
-        // })
+        const task = new datasync.CfnTask(this, "EfsToS3Task", {
+            sourceLocationArn: efsLocation.ref,
+            destinationLocationArn: s3Location.ref,
+            excludes: [{ 'filterType': 'SIMPLE_PATTERN', 'value': '*.jar|/world|/logs' }],
+            options: {
+                transferMode: 'CHANGED'
+            }
+        })
     }
     
 }

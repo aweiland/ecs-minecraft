@@ -6,12 +6,13 @@ import {clone} from './util'
 
 export class MinecraftVpc extends ec2.Vpc {
     constructor(scope: cdk.Construct, id: string, props: ec2.VpcProps) {
-        const vpcProps = clone(props)
-        vpcProps.subnetConfiguration = [ 
-            { cidrMask: 24, name: 'Public', subnetType: ec2.SubnetType.PUBLIC, }, 
-            { cidrMask: 24, name: 'Private', subnetType: ec2.SubnetType.PRIVATE, }
-          ]
-        super(scope, id, vpcProps);
+        super(scope, id, {
+            ...props,
+            subnetConfiguration: [ 
+                { cidrMask: 24, name: 'Public', subnetType: ec2.SubnetType.PUBLIC, }, 
+                { cidrMask: 24, name: 'Private', subnetType: ec2.SubnetType.PRIVATE, }
+            ]
+        });
     }
     
 }
