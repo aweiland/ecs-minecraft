@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from '@aws-cdk/core';
-import { EcsMinecraftStack } from '../lib/ecs-minecraft-stack';
+import { EcsMinecraftStack } from '../lib/EcsMinecraftStack';
 
 const app = new cdk.App();
 new EcsMinecraftStack(app, 'EcsMinecraftStack', {

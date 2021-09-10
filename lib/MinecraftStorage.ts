@@ -48,36 +48,35 @@ export class MinecraftStorage extends cdk.Construct {
         
         dataBucket.grantReadWrite(syncS3Role);
         
-        const s3Location = new datasync.CfnLocationS3(this, "S3Location", {
-            s3BucketArn: dataBucket.bucketArn,
-            s3Config: {
-                bucketAccessRoleArn: syncS3Role.roleArn
-            },
-            subdirectory: '/minecraft'
-        })
+        // const s3Location = new datasync.CfnLocationS3(this, "S3Location", {
+        //     s3BucketArn: dataBucket.bucketArn,
+        //     s3Config: {
+        //         bucketAccessRoleArn: syncS3Role.roleArn
+        //     },
+        //     subdirectory: '/minecraft'
+        // })
         
-        const cfnFilesystem = this.filesystem.mountTargetsAvailable as efs.CfnMountTarget[]
-        const sgArns = this.filesystem.connections.securityGroups.map(s => (s.node.defaultChild as ec2.CfnSecurityGroup).getAtt('arn').toString()) as string[]
+        // const cfnFilesystem = this.filesystem.mountTargetsAvailable as efs.CfnMountTarget[]
+        // const sgArns = this.filesystem.connections.securityGroups.map(s => (s.node.defaultChild as ec2.CfnSecurityGroup).getAtt('arn').toString()) as string[]
         
-        // const cfnBucket = bucket.node.defaultChild as s3.CfnBucket;
+
+        // const efsLocation = new datasync.CfnLocationEFS(this, "EFSLocation", {
+        //     efsFilesystemArn: this.filesystem.fileSystemArn,
+        //     subdirectory: "/minecraft",
+        //     ec2Config: {
+        //         subnetArn: cfnFilesystem[0].subnetId,
+        //         securityGroupArns: sgArns
+        //     }
+        // });
         
-        const efsLocation = new datasync.CfnLocationEFS(this, "EFSLocation", {
-            efsFilesystemArn: this.filesystem.fileSystemArn,
-            subdirectory: "/minecraft",
-            ec2Config: {
-                subnetArn: cfnFilesystem[0].subnetId,
-                securityGroupArns: sgArns
-            }
-        });
-        
-        const task = new datasync.CfnTask(this, "EfsToS3Task", {
-            sourceLocationArn: efsLocation.getAtt('arn').toString(),
-            destinationLocationArn: s3Location.getAtt('arn').toString(),
-            excludes: [{ 'FilterType': 'SIMPLE_PATTERN', 'Value': '*.jar|/world|/logs' }],
-            options: {
-                transferMode: 'CHANGED'
-            }
-        })
+        // const task = new datasync.CfnTask(this, "EfsToS3Task", {
+        //     sourceLocationArn: efsLocation.getAtt('arn').toString(),
+        //     destinationLocationArn: s3Location.getAtt('arn').toString(),
+        //     excludes: [{ 'filterType': 'SIMPLE_PATTERN', 'value': '*.jar|/world|/logs' }],
+        //     options: {
+        //         transferMode: 'CHANGED'
+        //     }
+        // })
     }
     
 }
