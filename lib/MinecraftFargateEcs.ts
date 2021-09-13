@@ -7,23 +7,23 @@ import * as iam from '@aws-cdk/aws-iam'
 
 interface MinecraftFargateEcsProps {
     vpc: ec2.Vpc
-    filesystem: efs.FileSystem,
-    accessPoint: efs.AccessPoint,
+    filesystem: efs.FileSystem
+    accessPoint: efs.AccessPoint
     hostname: string
 }
 
 
 export class MinecraftFargateEcs extends cdk.Construct {
-    
+
     public readonly service: ecs.FargateService;
     public readonly ecsControlPolicy: iam.Policy;
     public readonly ecsTaskRole: iam.Role;
-    
+
     constructor(scope: cdk.Construct, id: string, props: MinecraftFargateEcsProps) {
         super(scope, id);
-        
+
         const image = "itzg/minecraft-bedrock-server";
-        
+
         const efsAccessPolicy = new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
@@ -41,22 +41,22 @@ export class MinecraftFargateEcs extends cdk.Construct {
             }),
           ],
         });
-        
+
         this.ecsTaskRole = new iam.Role(this, "EcsTaskRole", {
             assumedBy: new iam.ServicePrincipal('ecs.amazonaws.com'),
             inlinePolicies: {
                 EFSAccess: efsAccessPolicy
             }
         })
-        
-        
-        
+
+
+
         const task = new ecs.FargateTaskDefinition(this, "MinecraftTask", {
             memoryLimitMiB: 2000,
             cpu: 1,
             taskRole: this.ecsTaskRole
         });
-        
+
         const volumeConfig = {
             name: "data",
             efsVolumeConfiguration:{
@@ -64,15 +64,15 @@ export class MinecraftFargateEcs extends cdk.Construct {
                 rootDirectory: "/minecraft"
             }
         };
-        
+
         task.addVolume(volumeConfig);
-        
-        
+
+
         const cluster = new ecs.Cluster(this, "MinecraftCluster", {
             vpc: props.vpc
         });
-        
-        
+
+
         const container = task.addContainer("MinecraftContainer", {
             image: ecs.ContainerImage.fromRegistry(image),
             essential: false,
@@ -80,11 +80,11 @@ export class MinecraftFargateEcs extends cdk.Construct {
                 EULA: 'TRUE'
             }
         });
-        
+
         container.addPortMappings({containerPort: 25565});
         container.addMountPoints({ containerPath: '/data', sourceVolume: volumeConfig.name, readOnly: false });
-        
-        
+
+
         const watchdog = task.addContainer("Watchdog", {
             image: ecs.ContainerImage.fromRegistry("doctorray/minecraft-ecsfargate-watchdog"),
             essential: true,
@@ -95,7 +95,7 @@ export class MinecraftFargateEcs extends cdk.Construct {
                 SERVERNAME: props.hostname,
             }
         });
-        
+
 
         this.service = new ecs.FargateService(this, "MinecraftService", {
             serviceName: 'minecraft-server',
@@ -108,12 +108,12 @@ export class MinecraftFargateEcs extends cdk.Construct {
                 {capacityProvider: 'FARGATE_SPOT'}
             ]
         });
-        
-        
+
+
         const ecsControlDocument = new iam.PolicyDocument({
           statements: [
             new iam.PolicyStatement({
-              resources: 
+              resources:
                 [
                     this.service.serviceArn,
                     task.taskDefinitionArn + '/*'
@@ -123,7 +123,7 @@ export class MinecraftFargateEcs extends cdk.Construct {
                   'elasticfilesystem:ClientWrite',
                   'elasticfilesystem:DescribeFileSystems'
               ]
-              
+
             }),
             new iam.PolicyStatement({
                 resources: ['*'],
@@ -131,17 +131,17 @@ export class MinecraftFargateEcs extends cdk.Construct {
             })
           ],
         });
-        
+
         this.ecsControlPolicy = new iam.Policy(this, "EcsControl", {
             document: ecsControlDocument
         })
-        
+
         this.ecsTaskRole.attachInlinePolicy(this.ecsControlPolicy);
-        
+
         // Allow service to access EFS
         props.filesystem.connections.allowFrom(this.service, ec2.Port.tcp(2049));
-        
+
         this.service.connections.allowFromAnyIpv4(ec2.Port.tcp(25565));
-        
+
     }
 }
