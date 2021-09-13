@@ -19,6 +19,9 @@ interface MinecraftStarterProps {
 //https://github.com/doctorray117/minecraft-ondemand
 
 export class MinecraftStarter extends cdk.Construct {
+    
+    
+    
     constructor(scope: cdk.Construct, id: string, props: MinecraftStarterProps) {
         super(scope, id);
 

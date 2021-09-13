@@ -10,19 +10,30 @@ interface MinecraftFargateEcsProps {
     filesystem: efs.FileSystem
     accessPoint: efs.AccessPoint
     hostname: string
+    image?: string
+    cpu?: number
+    memory?: number
 }
 
+
+interface LimitConversion {
+    cpu: number
+    memory: number
+}
 
 export class MinecraftFargateEcs extends cdk.Construct {
 
     public readonly service: ecs.FargateService;
     public readonly ecsControlPolicy: iam.Policy;
     public readonly ecsTaskRole: iam.Role;
-
+    
+    
     constructor(scope: cdk.Construct, id: string, props: MinecraftFargateEcsProps) {
         super(scope, id);
 
-        const image = "itzg/minecraft-bedrock-server";
+        const image = props.image || "itzg/minecraft-bedrock-server";
+        
+        const {cpu, memory} = this.convertLimits(props.cpu || 1, props.memory || 2);
 
         const efsAccessPolicy = new iam.PolicyDocument({
           statements: [
@@ -52,8 +63,8 @@ export class MinecraftFargateEcs extends cdk.Construct {
 
 
         const task = new ecs.FargateTaskDefinition(this, "MinecraftTask", {
-            memoryLimitMiB: 2000,
-            cpu: 1,
+            memoryLimitMiB: memory,
+            cpu: cpu,
             taskRole: this.ecsTaskRole
         });
 
@@ -105,7 +116,7 @@ export class MinecraftFargateEcs extends cdk.Construct {
             cluster: cluster,
             taskDefinition: task,
             capacityProviderStrategies: [
-                {capacityProvider: 'FARGATE_SPOT'}
+                {capacityProvider: 'FARGATE_SPOT', base: 1, weight: 1}
             ]
         });
 
@@ -144,4 +155,15 @@ export class MinecraftFargateEcs extends cdk.Construct {
         this.service.connections.allowFromAnyIpv4(ec2.Port.tcp(25565));
 
     }
+    
+    convertLimits(cpu: number, memory: number): LimitConversion {
+        const converted = {
+            cpu: cpu * 1024,
+            memory: memory * 1024
+        };
+        
+        return converted;
+    }
+    
+    
 }
