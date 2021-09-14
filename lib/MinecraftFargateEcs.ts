@@ -13,6 +13,7 @@ interface MinecraftFargateEcsProps {
     image?: string
     cpu?: number
     memory?: number
+    route53Zone: string
 }
 
 
@@ -24,9 +25,8 @@ interface LimitConversion {
 export class MinecraftFargateEcs extends cdk.Construct {
 
     public readonly service: ecs.FargateService;
-    public readonly ecsControlPolicy: iam.Policy;
+    public readonly ecsControlStatement: iam.PolicyStatement
     public readonly ecsTaskRole: iam.Role;
-    
     
     constructor(scope: cdk.Construct, id: string, props: MinecraftFargateEcsProps) {
         super(scope, id);
@@ -54,18 +54,31 @@ export class MinecraftFargateEcs extends cdk.Construct {
         });
 
         this.ecsTaskRole = new iam.Role(this, "EcsTaskRole", {
-            assumedBy: new iam.ServicePrincipal('ecs.amazonaws.com'),
+            assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
             inlinePolicies: {
                 EFSAccess: efsAccessPolicy
             }
         })
 
+        
+        const executionRole = new iam.Role(this, "EcsExecutionRole", {
+            assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
+            managedPolicies: [
+                iam.ManagedPolicy.fromAwsManagedPolicyName('CloudWatchLogsFullAccess')
+            ]
+        });
+        
+        
+        const cluster = new ecs.Cluster(this, "MinecraftCluster", {
+            vpc: props.vpc
+        });
 
 
         const task = new ecs.FargateTaskDefinition(this, "MinecraftTask", {
             memoryLimitMiB: memory,
-            cpu: cpu,
-            taskRole: this.ecsTaskRole
+            cpu,
+            taskRole: this.ecsTaskRole,
+            executionRole,
         });
 
         const volumeConfig = {
@@ -79,20 +92,19 @@ export class MinecraftFargateEcs extends cdk.Construct {
         task.addVolume(volumeConfig);
 
 
-        const cluster = new ecs.Cluster(this, "MinecraftCluster", {
-            vpc: props.vpc
-        });
-
-
         const container = task.addContainer("MinecraftContainer", {
             image: ecs.ContainerImage.fromRegistry(image),
             essential: false,
             environment: {
                 EULA: 'TRUE'
-            }
+            },
+            logging: ecs.LogDriver.awsLogs({
+                streamPrefix: 'minecraft-server',
+                
+            })
         });
 
-        container.addPortMappings({containerPort: 25565});
+        container.addPortMappings({ containerPort: 25565 });
         container.addMountPoints({ containerPath: '/data', sourceVolume: volumeConfig.name, readOnly: false });
 
 
@@ -100,11 +112,15 @@ export class MinecraftFargateEcs extends cdk.Construct {
             image: ecs.ContainerImage.fromRegistry("doctorray/minecraft-ecsfargate-watchdog"),
             essential: true,
             environment: {
-                CLUSTER: 'minecraft',
+                CLUSTER: cluster.clusterName,
                 SERVICE: 'minecraft-server',
-                DNSZONE: 'ROUTE53ZONEHERE',
+                DNSZONE: props.route53Zone,
                 SERVERNAME: props.hostname,
-            }
+            },
+            logging: ecs.LogDriver.awsLogs({
+                streamPrefix: 'minecraft-watchdog',
+                
+            })
         });
 
 
@@ -120,41 +136,32 @@ export class MinecraftFargateEcs extends cdk.Construct {
             ]
         });
 
-
-        const ecsControlDocument = new iam.PolicyDocument({
-          statements: [
-            new iam.PolicyStatement({
-              resources:
-                [
+        
+        // Reusable control statement for the ECS service
+        this.ecsControlStatement = new iam.PolicyStatement({
+            resources: [
                     this.service.serviceArn,
                     task.taskDefinitionArn + '/*'
-                ],
-              actions: [
-                  'ecs:*',
-                  'elasticfilesystem:ClientWrite',
-                  'elasticfilesystem:DescribeFileSystems'
-              ]
-
-            }),
-            new iam.PolicyStatement({
-                resources: ['*'],
-                actions: ['ec2:DescribeNetworkInterfaces']
-            })
-          ],
+            ],
+            actions: [ 'ecs:*']
         });
 
-        this.ecsControlPolicy = new iam.Policy(this, "EcsControl", {
-            document: ecsControlDocument
-        })
+        const ifaceStatement = new iam.PolicyStatement({
+            resources: ['*'],
+            actions: ['ec2:DescribeNetworkInterfaces']
+        });
 
-        this.ecsTaskRole.attachInlinePolicy(this.ecsControlPolicy);
+        const ecsControlPolicy = new iam.Policy(this, "EcsControl");
+        ecsControlPolicy.addStatements(this.ecsControlStatement, ifaceStatement)
+
+        this.ecsTaskRole.attachInlinePolicy(ecsControlPolicy);
 
         // Allow service to access EFS
         props.filesystem.connections.allowFrom(this.service, ec2.Port.tcp(2049));
 
         this.service.connections.allowFromAnyIpv4(ec2.Port.tcp(25565));
-
     }
+    
     
     convertLimits(cpu: number, memory: number): LimitConversion {
         const converted = {

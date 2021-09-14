@@ -3,9 +3,12 @@ import * as ec2 from '@aws-cdk/aws-ec2';
 import {MinecraftVpc} from './MinecraftVpc';
 import {MinecraftStorage} from './MinecraftStorage';
 import {MinecraftFargateEcs} from "./MinecraftFargateEcs";
+import {MinecraftStarter} from './MinecraftStarter'
 
 interface EcsMinecraftStackConfig extends cdk.StackProps, ec2.VpcProps {
   hostname: string
+  route53LogGroup: string
+  route53Zone: string
 }
 
 export class EcsMinecraftStack extends cdk.Stack {
@@ -22,12 +25,25 @@ export class EcsMinecraftStack extends cdk.Stack {
     });
 
     const storage = new MinecraftStorage(this, 'MinecraftStorage', {vpc: this.vpc});
+    
     const fargate = new MinecraftFargateEcs(this, "MinecraftFargate", {
         vpc: this.vpc,
         accessPoint: storage.accessPoint,
         filesystem: storage.filesystem,
-        hostname: props.hostname
+        hostname: props.hostname,
+        route53Zone: props.route53Zone
     });
+    
+    new MinecraftStarter(this, 'MinecraftStarter', {
+      ecsControlStatment: fargate.ecsControlStatement,
+      filesystem: storage.filesystem,
+      hostname: props.hostname,
+      route53LogGroup: props.route53LogGroup,
+      route53Zone: props.route53Zone,
+      vpc: this.vpc,
+      ecsService: fargate.service,
+      ecsTaskRole: fargate.ecsTaskRole
+    })
 
 
     // The code that defines your stack goes here

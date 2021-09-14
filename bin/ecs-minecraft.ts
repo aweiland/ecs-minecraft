@@ -6,7 +6,9 @@ import { EcsMinecraftStack } from '../lib/EcsMinecraftStack';
 const app = new cdk.App();
 new EcsMinecraftStack(app, 'EcsMinecraftStack', {
   cidr: '10.100.0.0/16',
-  hostname: 'minecraft.weiland.site'
+  hostname: 'minecraft.weiland.site',
+  route53LogGroup: '/aws/route53/weiland.site',
+  route53Zone: 'ZP5IX1RO5J2ED'
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
    * but a single synthesized template can be deployed anywhere. */
