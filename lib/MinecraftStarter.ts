@@ -15,7 +15,6 @@ interface MinecraftStarterProps {
     vpc: ec2.Vpc
     filesystem: efs.FileSystem
     ecsControlStatment: iam.PolicyStatement
-    route53Zone: string
     route53LogGroup: string
     hostname: string
     ecsService: ecs.FargateService
@@ -43,26 +42,6 @@ export class MinecraftStarter extends cdk.Construct {
         lambdaFn.addToRolePolicy(props.ecsControlStatment);
 
         // const hostedZone = route53.HostedZone.fromHostedZoneId(this, "HostedZone", props.route53Zone)
-
-        const route53Policy1 = new iam.PolicyStatement({
-              resources: ['arn:aws:route53:::hostedzone/' + props.route53Zone],
-              actions: [
-                  'route53:GetHostedZone',
-                  'route53:ChangeResourceRecordSets',
-                  'route53:ListResourceRecordSets'
-              ]
-            });
-        const route53Policy2 = new iam.PolicyStatement({
-                resources: ['*'],
-                actions: ['route53:ListHostedZones']
-            });
-
-        const policy = new iam.Policy(this, "Route53Policy", {
-            statements: [route53Policy1, route53Policy2]
-        })
-        // lambdaFn.addToRolePolicy(route53Policy1);
-        // lambdaFn.addToRolePolicy(route53Policy2);
-        props.ecsTaskRole.attachInlinePolicy(policy);
         
         const logGroup = logs.LogGroup.fromLogGroupName(this, "MinecraftLogs", props.route53LogGroup);
         

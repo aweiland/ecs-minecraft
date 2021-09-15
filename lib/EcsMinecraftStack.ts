@@ -39,7 +39,6 @@ export class EcsMinecraftStack extends cdk.Stack {
       filesystem: storage.filesystem,
       hostname: props.hostname,
       route53LogGroup: props.route53LogGroup,
-      route53Zone: props.route53Zone,
       vpc: this.vpc,
       ecsService: fargate.service,
       ecsTaskRole: fargate.ecsTaskRole

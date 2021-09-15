@@ -10,7 +10,7 @@ export class MinecraftVpc extends ec2.Vpc {
             ...props,
             subnetConfiguration: [ 
                 { cidrMask: 24, name: 'Public', subnetType: ec2.SubnetType.PUBLIC, }, 
-                { cidrMask: 24, name: 'Private', subnetType: ec2.SubnetType.PRIVATE, }
+                { cidrMask: 24, name: 'Isolated', subnetType: ec2.SubnetType.ISOLATED }
             ]
         });
     }

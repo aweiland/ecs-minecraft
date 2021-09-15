@@ -4,6 +4,7 @@ import * as datasync from '@aws-cdk/aws-datasync';
 import * as s3 from '@aws-cdk/aws-s3'
 import * as iam from '@aws-cdk/aws-iam'
 import * as ec2 from '@aws-cdk/aws-ec2'
+import * as logs from '@aws-cdk/aws-logs'
 
 
 interface MinecraftStorageProps {
@@ -20,12 +21,17 @@ export class MinecraftStorage extends cdk.Construct {
         super(scope, id);
         // --- EFS ---
         this.filesystem = new efs.FileSystem(this, "MinecraftEFS", {
-            vpc: props.vpc,
+            vpc: props.vpc, 
         });
 
         this.accessPoint = this.filesystem.addAccessPoint("MinecraftRoot", {
             posixUser: { uid: '1000', gid: '1000' },
-            path: "/minecraft"
+            path: "/minecraft",
+            createAcl: {
+                ownerGid: '1000',
+                ownerUid: '1000',
+                permissions: '0755'
+            }
         });
 
         const efsAccessSg = new ec2.SecurityGroup(this, "EfsAccessSG", {
@@ -43,10 +49,36 @@ export class MinecraftStorage extends cdk.Construct {
         const dataBucket = new s3.Bucket(this, "MinecraftBucket");
 
         const syncS3Role = new iam.Role(this, "DataSyncS3Role", {
-            assumedBy: new iam.ServicePrincipal('datasync.amazonaws.com')
+            assumedBy: new iam.ServicePrincipal('datasync.amazonaws.com'),
+            inlinePolicies: {
+                SyncBucket: new iam.PolicyDocument({
+                    statements: [
+                        new iam.PolicyStatement({
+                            actions: [
+                                "s3:GetBucketLocation",
+                                "s3:ListBucket",
+                                "s3:ListBucketMultipartUploads"
+                            ],
+                            resources: [dataBucket.bucketArn]
+                        }),
+                        new iam.PolicyStatement({
+                            actions: [
+                                "s3:AbortMultipartUpload",
+                                "s3:DeleteObject",
+                                "s3:GetObject",
+                                "s3:ListMultipartUploadParts",
+                                "s3:GetObjectTagging",
+                                "s3:PutObjectTagging",
+                                "s3:PutObject"
+                            ],
+                            resources: [`${dataBucket.bucketArn}/*`]
+                        })
+                    ]
+                })
+            }
         });
 
-        dataBucket.grantReadWrite(syncS3Role);
+        // dataBucket.grantReadWrite(syncS3Role);
 
         const s3Location = new datasync.CfnLocationS3(this, "S3Location", {
             s3BucketArn: dataBucket.bucketArn,
@@ -66,7 +98,7 @@ export class MinecraftStorage extends cdk.Construct {
         const subnetArn = cdk.Arn.format({
             resource: "subnet",
             service: "ec2",
-            resourceName: props.vpc.selectSubnets({subnetType: ec2.SubnetType.PRIVATE}).subnets[0].subnetId
+            resourceName: props.vpc.selectSubnets({subnetType: ec2.SubnetType.ISOLATED}).subnets[0].subnetId
         }, cdk.Stack.of(this))
 
         const efsLocation = new datasync.CfnLocationEFS(this, "EFSLocation", {
@@ -77,14 +109,23 @@ export class MinecraftStorage extends cdk.Construct {
                 securityGroupArns: [sgArn]
             }
         });
+        
+        efsLocation.node.addDependency(this.filesystem.mountTargetsAvailable);
+        
+        const logGroup = new logs.LogGroup(this, "MinecraftLogs", {
+            logGroupName: '/minecraft/datasync'
+        });
 
         const task = new datasync.CfnTask(this, "EfsToS3Task", {
             sourceLocationArn: efsLocation.ref,
             destinationLocationArn: s3Location.ref,
+            cloudWatchLogGroupArn: logGroup.logGroupArn,
             excludes: [{ 'filterType': 'SIMPLE_PATTERN', 'value': '*.jar|/world|/logs' }],
             options: {
-                transferMode: 'CHANGED'
+                transferMode: 'CHANGED',
+                logLevel: 'BASIC'
             }
+            
         })
     }
 
