@@ -45,11 +45,11 @@ export class MinecraftFargateEcs extends cdk.Construct {
                   'elasticfilesystem:ClientWrite',
                   'elasticfilesystem:DescribeFileSystems'
               ],
-            //   conditions: {
-            //       StringEquals: {
-            //           "elasticfilesystem:AccessPointArn": props.accessPoint.accessPointArn
-            //       }
-            //   }
+              conditions: {
+                  StringEquals: {
+                      "elasticfilesystem:AccessPointArn": props.accessPoint.accessPointArn
+                  }
+              }
             }),
           ],
         });
@@ -115,10 +115,10 @@ export class MinecraftFargateEcs extends cdk.Construct {
             })
         });
 
-        container.addPortMappings({ containerPort: 25565 });
+        container.addPortMappings({ containerPort: 19132, protocol: ecs.Protocol.UDP});
         container.addMountPoints({ containerPath: '/data', sourceVolume: volumeConfig.name, readOnly: false });
 
-
+        // --- Watchdog Container (needs to be reworked for Bedrock) ---
         const watchdog = task.addContainer("Watchdog", {
             image: ecs.ContainerImage.fromRegistry("doctorray/minecraft-ecsfargate-watchdog"),
             essential: true,
@@ -144,17 +144,20 @@ export class MinecraftFargateEcs extends cdk.Construct {
             assignPublicIp: true,
             cluster: cluster,
             taskDefinition: task,
+            platformVersion: ecs.FargatePlatformVersion.LATEST,
             capacityProviderStrategies: [
                 {capacityProvider: 'FARGATE_SPOT', base: 1, weight: 1}
-            ]
+            ],
+            
         });
+        
+        // 25565 for Java
+        this.service.connections.allowFromAnyIpv4(ec2.Port.udp(19132));
 
         const {account, region } = cdk.Stack.of(this)
         // Reusable control statement for the ECS service
         this.ecsControlStatement = new iam.PolicyStatement({
             resources: [
-                    // this.service.serviceArn,
-                    // task.taskDefinitionArn + '/*'
                 `arn:aws:ecs:${region}:${account}:service/minecraft/minecraft-server`,
                 `arn:aws:ecs:${region}:${account}:task/minecraft/*`
             ],
@@ -168,14 +171,14 @@ export class MinecraftFargateEcs extends cdk.Construct {
 
         const ecsControlPolicy = new iam.Policy(this, "EcsControl");
         ecsControlPolicy.addStatements(this.ecsControlStatement, ifaceStatement)
-
         this.ecsTaskRole.attachInlinePolicy(ecsControlPolicy);
+        
         logGroup.grantWrite(this.ecsTaskRole);
 
         // Allow service to access EFS
         props.filesystem.connections.allowFrom(this.service, ec2.Port.tcp(2049));
 
-        this.service.connections.allowFromAnyIpv4(ec2.Port.tcp(25565));
+        
         
         // Route 53
         const route53Policy1 = new iam.PolicyStatement({

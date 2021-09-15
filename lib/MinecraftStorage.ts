@@ -115,18 +115,34 @@ export class MinecraftStorage extends cdk.Construct {
         const logGroup = new logs.LogGroup(this, "MinecraftLogs", {
             logGroupName: '/minecraft/datasync'
         });
+        logGroup.grantWrite(new iam.ServicePrincipal('datasync.amazonaws.com'))
+        
 
-        const task = new datasync.CfnTask(this, "EfsToS3Task", {
+        new datasync.CfnTask(this, "EfsToS3Task", {
+            name: 'minecraft-efs-to-s3',
             sourceLocationArn: efsLocation.ref,
             destinationLocationArn: s3Location.ref,
-            cloudWatchLogGroupArn: logGroup.logGroupArn,
+            // cloudWatchLogGroupArn: logGroup.logGroupArn,
             excludes: [{ 'filterType': 'SIMPLE_PATTERN', 'value': '*.jar|/world|/logs' }],
             options: {
+                overwriteMode: 'ALWAYS',
                 transferMode: 'CHANGED',
-                logLevel: 'BASIC'
+                // logLevel: 'BASIC'
             }
-            
-        })
+        });
+        
+        new datasync.CfnTask(this, "S3ToEfsTask", {
+            name: 'minecraft-s3-to-efs',
+            sourceLocationArn: s3Location.ref,
+            destinationLocationArn: efsLocation.ref,
+            // cloudWatchLogGroupArn: logGroup.logGroupArn,
+            // excludes: [{ 'filterType': 'SIMPLE_PATTERN', 'value': '*.jar|/world|/logs' }],
+            options: {
+                overwriteMode: 'ALWAYS',
+                transferMode: 'CHANGED',
+                // logLevel: 'BASIC'
+            }
+        });
     }
 
 }
