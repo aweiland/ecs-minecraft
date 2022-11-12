@@ -1,10 +1,19 @@
-import * as cdk from '@aws-cdk/core';
-import * as efs from '@aws-cdk/aws-efs';
-import * as datasync from '@aws-cdk/aws-datasync';
-import * as s3 from '@aws-cdk/aws-s3'
-import * as iam from '@aws-cdk/aws-iam'
-import * as ec2 from '@aws-cdk/aws-ec2'
-import * as logs from '@aws-cdk/aws-logs'
+import * as cdk from 'aws-cdk-lib';
+// import * as efs from '@aws-cdk/aws-efs';
+// import * as datasync from '@aws-cdk/aws-datasync';
+// import * as s3 from '@aws-cdk/aws-s3'
+// import * as iam from '@aws-cdk/aws-iam'
+// import * as ec2 from '@aws-cdk/aws-ec2'
+// import * as logs from '@aws-cdk/aws-logs'
+
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as efs from "aws-cdk-lib/aws-efs";
+import * as s3 from "aws-cdk-lib/aws-s3";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as logs from "aws-cdk-lib/aws-logs";
+import * as datasync from "aws-cdk-lib/aws-datasync";
+import {Construct} from "constructs";
+
 
 
 interface MinecraftStorageProps {
@@ -12,12 +21,12 @@ interface MinecraftStorageProps {
 }
 
 
-export class MinecraftStorage extends cdk.Construct {
+export class MinecraftStorage extends Construct {
 
     public readonly filesystem: efs.FileSystem
     public readonly accessPoint: efs.AccessPoint
 
-    constructor(scope: cdk.Construct, id: string, props: MinecraftStorageProps) {
+    constructor(scope: Construct, id: string, props: MinecraftStorageProps) {
         super(scope, id);
         // --- EFS ---
         this.filesystem = new efs.FileSystem(this, "MinecraftEFS", {
@@ -98,7 +107,7 @@ export class MinecraftStorage extends cdk.Construct {
         const subnetArn = cdk.Arn.format({
             resource: "subnet",
             service: "ec2",
-            resourceName: props.vpc.selectSubnets({subnetType: ec2.SubnetType.ISOLATED}).subnets[0].subnetId
+            resourceName: props.vpc.selectSubnets({subnetType: ec2.SubnetType.PRIVATE_ISOLATED}).subnets[0].subnetId
         }, cdk.Stack.of(this))
 
         const efsLocation = new datasync.CfnLocationEFS(this, "EFSLocation", {

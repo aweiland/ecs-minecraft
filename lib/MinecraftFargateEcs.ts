@@ -1,9 +1,17 @@
-import * as cdk from '@aws-cdk/core';
-import * as efs from '@aws-cdk/aws-efs';
-import * as ecs from '@aws-cdk/aws-ecs'
-import * as ec2 from '@aws-cdk/aws-ec2'
-import * as iam from '@aws-cdk/aws-iam'
-import * as logs from '@aws-cdk/aws-logs'
+// import * as cdk from '@aws-cdk/core';
+// import * as efs from '@aws-cdk/aws-efs';
+// import * as ecs from '@aws-cdk/aws-ecs'
+// import * as ec2 from '@aws-cdk/aws-ec2'
+// import * as iam from '@aws-cdk/aws-iam'
+// import * as logs from '@aws-cdk/aws-logs'
+
+import * as cdk from 'aws-cdk-lib';
+import * as ec2 from "aws-cdk-lib/aws-ec2";
+import * as ecs from "aws-cdk-lib/aws-ecs";
+import * as efs from "aws-cdk-lib/aws-efs";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as logs from "aws-cdk-lib/aws-logs";
+import {Construct} from "constructs";
 
 
 interface MinecraftFargateEcsProps {
@@ -23,13 +31,14 @@ interface LimitConversion {
     memory: number
 }
 
-export class MinecraftFargateEcs extends cdk.Construct {
+export class MinecraftFargateEcs extends Construct {
 
     public readonly service: ecs.FargateService;
     public readonly ecsControlStatement: iam.PolicyStatement
     public readonly ecsTaskRole: iam.Role;
+    public readonly ecsCluster: ecs.Cluster
     
-    constructor(scope: cdk.Construct, id: string, props: MinecraftFargateEcsProps) {
+    constructor(scope: Construct, id: string, props: MinecraftFargateEcsProps) {
         super(scope, id);
 
         const image = props.image || "itzg/minecraft-bedrock-server";
@@ -69,7 +78,7 @@ export class MinecraftFargateEcs extends cdk.Construct {
         });
         
         
-        const cluster = new ecs.Cluster(this, "MinecraftCluster", {
+        this.ecsCluster = new ecs.Cluster(this, "MinecraftCluster", {
             vpc: props.vpc,
             clusterName: 'minecraft',
             enableFargateCapacityProviders: true
@@ -123,7 +132,7 @@ export class MinecraftFargateEcs extends cdk.Construct {
             image: ecs.ContainerImage.fromRegistry("doctorray/minecraft-ecsfargate-watchdog"),
             essential: true,
             environment: {
-                CLUSTER: cluster.clusterName,
+                CLUSTER: this.ecsCluster.clusterName,
                 SERVICE: 'minecraft-server',
                 DNSZONE: props.route53Zone,
                 SERVERNAME: props.hostname,
@@ -142,7 +151,7 @@ export class MinecraftFargateEcs extends cdk.Construct {
             desiredCount: 0,
             vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
             assignPublicIp: true,
-            cluster: cluster,
+            cluster: this.ecsCluster,
             taskDefinition: task,
             platformVersion: ecs.FargatePlatformVersion.LATEST,
             capacityProviderStrategies: [
@@ -210,6 +219,5 @@ export class MinecraftFargateEcs extends cdk.Construct {
         
         return converted;
     }
-    
-    
+
 }
