@@ -37,6 +37,7 @@ export class MinecraftFargateEcs extends Construct {
     public readonly ecsControlStatement: iam.PolicyStatement
     public readonly ecsTaskRole: iam.Role;
     public readonly ecsCluster: ecs.Cluster
+    public readonly eip: ec2.CfnEIP
     
     constructor(scope: Construct, id: string, props: MinecraftFargateEcsProps) {
         super(scope, id);
@@ -208,8 +209,11 @@ export class MinecraftFargateEcs extends Construct {
         })
         
         this.ecsTaskRole.attachInlinePolicy(policy);
+
+        this.eip = new ec2.CfnEIP(this, "minecraft-server");
     }
-    
+
+
     
     convertLimits(cpu: number, memory: number): LimitConversion {
         const converted = {
